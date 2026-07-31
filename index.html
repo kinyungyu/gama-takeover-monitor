@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gamma Communications (GAMA) — Takeover Signal Monitor</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d27;
+            --border: #2a2d3a;
+            --accent: #4f8cff;
+            --accent2: #22c55e;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+            --text: #e2e4ea;
+            --muted: #8b8fa3;
+            --hover: #252836;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 32px; flex-wrap: wrap; gap: 16px;
+        }
+        .header h1 { font-size: 28px; font-weight: 700; color: #fff; }
+        .header h1 span { color: var(--accent); }
+        .header-subtitle { color: var(--muted); font-size: 14px; margin-top: 4px; }
+        .header-right { display: flex; gap: 12px; flex-wrap: wrap; }
+        .last-checked {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px 20px; font-size: 13px; color: var(--muted);
+        }
+        .last-checked strong { color: var(--accent2); }
+
+        /* Deal Status Banner */
+        .deal-banner {
+            border: 1px solid rgba(239,68,68,0.4); border-radius: 12px;
+            padding: 20px 28px; margin-bottom: 32px;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+            background: linear-gradient(135deg, rgba(239,68,68,0.08), rgba(245,158,11,0.05));
+        }
+        .deal-status-dot {
+            width: 12px; height: 12px; border-radius: 50%; background: var(--danger);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .deal-status-text { font-size: 18px; font-weight: 700; color: #fff; }
+        .deal-status-sub { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+        /* Signal Timeline */
+        .signal-sequence {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 32px;
+        }
+        .signal-sequence h2 { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: #fff; }
+        .timeline {
+            display: flex; align-items: flex-start; gap: 0;
+            overflow-x: auto; padding-bottom: 8px;
+        }
+        .timeline-step { flex: 1; min-width: 140px; text-align: center; position: relative; }
+        .timeline-step::after {
+            content: ''; position: absolute; top: 20px; right: -50%; width: 100%;
+            height: 2px; background: var(--border);
+        }
+        .timeline-step:last-child::after { display: none; }
+        .step-dot {
+            width: 40px; height: 40px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 10px; font-weight: 700; font-size: 14px;
+            position: relative; z-index: 1;
+        }
+        .step-dot.complete { background: var(--accent2); color: #fff; }
+        .step-dot.active { background: var(--danger); color: #fff; animation: pulse 1.5s ease-in-out infinite; }
+        .step-dot.future { background: var(--border); color: var(--muted); }
+        .step-label { font-size: 12px; color: var(--muted); padding: 0 8px; }
+        .step-label strong { color: var(--text); display: block; font-size: 13px; margin-bottom: 2px; }
+
+        /* Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 32px; }
+
+        /* Cards */
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 24px;
+        }
+        .card h2 {
+            font-size: 16px; font-weight: 600; margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px; color: #fff;
+        }
+        .card h2 .icon { font-size: 20px; }
+        .card-badge {
+            font-size: 11px; padding: 2px 8px; border-radius: 10px;
+            font-weight: 600; margin-left: auto;
+        }
+        .badge-detected { background: rgba(34,197,94,0.15); color: var(--accent2); }
+        .badge-watching { background: rgba(245,158,11,0.15); color: var(--warn); }
+        .badge-nosignal { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .badge-info { background: rgba(79,140,255,0.15); color: var(--accent); }
+        .badge-active { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .badge-withdrawn { background: rgba(107,114,128,0.2); color: #9ca3af; }
+
+        .card-content { font-size: 14px; color: var(--muted); }
+        .card-content strong { color: var(--text); }
+        .card-content ul { list-style: none; margin-top: 8px; }
+        .card-content li { padding: 4px 0; padding-left: 16px; position: relative; }
+        .card-content li::before {
+            content: ''; position: absolute; left: 0; top: 12px;
+            width: 6px; height: 6px; border-radius: 50%; background: var(--border);
+        }
+        .card-content a { color: var(--accent); text-decoration: none; }
+        .card-content a:hover { text-decoration: underline; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th {
+            text-align: left; padding: 10px 12px; font-size: 12px; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+        }
+        .data-table td {
+            padding: 12px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: top;
+        }
+        .data-table tr:hover { background: var(--hover); }
+        .data-table a { color: var(--accent); text-decoration: none; }
+        .data-table a:hover { text-decoration: underline; }
+
+        /* Signal Strength */
+        .signal-strength { display: inline-flex; gap: 2px; }
+        .signal-bar { width: 4px; height: 14px; border-radius: 2px; background: var(--border); }
+        .signal-bar.on { background: var(--accent2); }
+        .signal-bar.warn { background: var(--warn); }
+
+        /* Log types */
+        .log-type {
+            font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+            display: inline-block; white-space: nowrap;
+        }
+        .type-insider { background: rgba(34,197,94,0.15); color: var(--accent2); }
+        .type-bidder { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .type-regulatory { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .type-catalyst { background: rgba(245,158,11,0.15); color: var(--warn); }
+        .type-market { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .type-board { background: rgba(6,182,212,0.15); color: #06b6d4; }
+        .type-withdrawn { background: rgba(107,114,128,0.2); color: #9ca3af; }
+        .type-adviser { background: rgba(79,140,255,0.15); color: var(--accent); }
+
+        /* Scenario Panels */
+        .scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .scenario-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 20px; position: relative; overflow: hidden;
+        }
+        .scenario-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        .scenario-green::before { background: var(--accent2); }
+        .scenario-yellow::before { background: var(--warn); }
+        .scenario-red::before { background: var(--danger); }
+        .scenario-blue::before { background: var(--accent); }
+        .scenario-prob { font-size: 32px; font-weight: 800; margin-bottom: 4px; }
+        .scenario-title { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+        .scenario-price { font-size: 13px; color: var(--muted); }
+        .scenario-price strong { color: var(--text); }
+
+        /* Checklist */
+        .checklist { list-style: none; }
+        .checklist li {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+        }
+        .checklist li:last-child { border-bottom: none; }
+        .check-box {
+            width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 4px;
+            flex-shrink: 0; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; transition: all 0.15s; margin-top: 1px;
+        }
+        .check-box:hover { border-color: var(--accent); }
+        .check-box.checked { background: var(--accent2); border-color: var(--accent2); }
+        .check-box.checked::after { content: '\2713'; color: #fff; font-size: 13px; font-weight: 700; }
+        .check-label { flex: 1; }
+        .check-label.done { text-decoration: line-through; color: var(--muted); }
+        .check-freq {
+            font-size: 11px; padding: 2px 8px; border-radius: 6px;
+            background: rgba(79,140,255,0.1); color: var(--accent); white-space: nowrap;
+        }
+
+        /* Source Links */
+        .source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+        .source-group h3 {
+            font-size: 13px; color: var(--muted); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .source-link-item {
+            display: flex; align-items: center; gap: 8px; padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .source-link-item:last-child { border-bottom: none; }
+        .source-link-item .dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+        }
+        .dot-official { background: var(--accent2); }
+        .dot-news { background: var(--warn); }
+        .dot-market { background: var(--accent); }
+        .dot-takeover { background: var(--danger); }
+        .source-link-item a { color: var(--accent); text-decoration: none; font-size: 14px; }
+        .source-link-item a:hover { text-decoration: underline; }
+
+        /* Catalyst Timeline */
+        .catalyst-list { list-style: none; }
+        .catalyst-item {
+            display: flex; gap: 16px; padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .catalyst-item:last-child { border-bottom: none; }
+        .catalyst-date {
+            min-width: 120px; font-size: 13px; font-weight: 600; color: var(--accent);
+        }
+        .catalyst-desc { font-size: 14px; flex: 1; }
+        .catalyst-urgency {
+            font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+            height: fit-content;
+        }
+        .urgency-imminent { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .urgency-near { background: rgba(245,158,11,0.15); color: var(--warn); }
+        .urgency-medium { background: rgba(79,140,255,0.15); color: var(--accent); }
+
+        /* EV Bar */
+        .ev-bar {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 20px 28px; margin-bottom: 32px;
+            display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+        }
+        .ev-label { font-size: 13px; color: var(--muted); }
+        .ev-value { font-size: 28px; font-weight: 800; color: var(--accent2); }
+        .ev-vs { font-size: 14px; color: var(--muted); }
+        .ev-vs strong { color: var(--text); }
+        .ev-ratio {
+            font-size: 14px; font-weight: 600; padding: 4px 12px;
+            border-radius: 6px; background: rgba(34,197,94,0.15); color: var(--accent2);
+        }
+
+        /* Partner tags */
+        .partner-tag {
+            font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+            display: inline-block;
+        }
+        .partner-pe { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .partner-trade { background: rgba(79,140,255,0.15); color: var(--accent); }
+        .partner-withdrawn { background: rgba(107,114,128,0.2); color: #9ca3af; }
+        .partner-active { background: rgba(239,68,68,0.15); color: var(--danger); }
+
+        /* Full-width card */
+        .card-full { margin-bottom: 32px; }
+
+        /* Countdown */
+        .countdown {
+            font-size: 36px; font-weight: 800; color: var(--danger);
+            text-align: center; padding: 8px 0;
+        }
+        .countdown-label { font-size: 13px; color: var(--muted); text-align: center; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .grid-3 { grid-template-columns: 1fr; }
+            .scenario-grid { grid-template-columns: 1fr; }
+            .source-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; }
+            .deal-banner { flex-direction: column; align-items: flex-start; }
+            .deal-status-sub { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <div>
+            <h1><span>GAMA</span> Takeover Signal Monitor</h1>
+            <div class="header-subtitle">Gamma Communications PLC (LSE: GAMA) &mdash; UCaaS / SIP / Cloud Comms &mdash; Active Offer Period</div>
+        </div>
+        <div class="header-right">
+            <div class="last-checked">Last checked: <strong>31 Jul 2026</strong></div>
+            <div class="last-checked">Share price: <strong>~980p</strong></div>
+            <div class="last-checked">Mkt cap: <strong>&pound;877m</strong></div>
+        </div>
+    </div>
+
+    <!-- CHANGE LOG -->
+    <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.25); border-radius: 10px; padding: 16px 20px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <strong style="color: var(--danger); font-size: 14px;">Changes Since Last Update (29 Jul &rarr; 31 Jul 2026)</strong>
+            <span style="font-size: 11px; color: var(--muted);">PUSU deadline in 5 days</span>
+        </div>
+        <div style="font-size: 12px; color: var(--text); line-height: 1.8;">
+            <div style="margin-bottom: 4px;"><span style="color: var(--danger); font-weight: 600;">PUSU DEADLINE NOW 5 DAYS AWAY:</span> Epiris must announce firm offer (Rule 2.7) or walk away (Rule 2.8) by <strong>5 August 2026, 5:00 PM</strong>. No price disclosed. Goldman Sachs advising. A third PUSU extension remains possible if Gamma board requests it.</div>
+            <div style="margin-bottom: 4px;"><span style="color: var(--accent); font-weight: 600;">MAN GROUP FORM 8.3 (31 Jul):</span> Man Group PLC filed public opening position disclosure. Confirms &ge;1% interest or short position in GAMA. First major Form 8.3 from an external party &mdash; suggests institutional positioning ahead of PUSU deadline.</div>
+            <div style="margin-bottom: 4px;"><span style="color: var(--accent2); font-weight: 600;">BUYBACK CONTINUES:</span> Total ~2.85M shares repurchased. Prices trending up through July &mdash; from 852-868p (early Jul) to 952-966p (late Jul). Shares in issue reduced to ~89.45M. Investec executing via daily market purchases.</div>
+            <div style="margin-bottom: 4px;"><span style="color: var(--accent); font-weight: 600;">SHARE PRICE RALLY:</span> Up ~14% over past 2 weeks. Buy signal triggered 7 Jul from pivot bottom. Currently ~980p (from 813p post-Providence withdrawal low). Market pricing increasing probability of Epiris bid.</div>
+            <div><span style="color: var(--warn); font-weight: 600;">"OTHER POTENTIAL BIDDERS" LANGUAGE CONTINUES:</span> Gamma board maintains discussions with unnamed parties. A new Rule 2.4 announcement naming a fresh bidder would reset the PUSU timeline entirely.</div>
+        </div>
+    </div>
+
+    <!-- DEAL STATUS BANNER -->
+    <div class="deal-banner">
+        <div class="deal-status-dot"></div>
+        <div class="deal-status-text">OFFER PERIOD ACTIVE</div>
+        <div style="font-size:14px; color:var(--text);">Epiris (sole bidder) &mdash; PUSU deadline: <strong>5 August 2026</strong></div>
+        <div class="deal-status-sub">Gamma advised by Barclays, Q Advisors, Investec, Peel Hunt</div>
+    </div>
+
+    <!-- PUSU COUNTDOWN -->
+    <div class="card" style="margin-bottom: 32px; text-align: center;">
+        <div class="countdown" id="countdown">5 days</div>
+        <div class="countdown-label">until Epiris PUSU deadline &mdash; 5 Aug 2026, 5:00 PM London</div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+            Put Up or Shut Up: Epiris must announce a firm intention to make an offer (Rule 2.7) or confirm it does not intend to (Rule 2.8). Deadline can be extended by the Takeover Panel at Gamma board&rsquo;s request.
+        </div>
+    </div>
+
+    <!-- OFFER TIMELINE -->
+    <div class="signal-sequence">
+        <h2>Takeover Sequence</h2>
+        <div class="timeline">
+            <div class="timeline-step">
+                <div class="step-dot complete">1</div>
+                <div class="step-label"><strong>Interest Disclosed</strong>Multiple parties approach Gamma (7 Apr 2026)</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot complete">2</div>
+                <div class="step-label"><strong>Parties Named</strong>Providence, Epiris, Oakley/Giacom confirmed (May 2026)</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot complete">3</div>
+                <div class="step-label"><strong>Parties Withdraw</strong>Oakley (12 Jun), Providence (24 Jun)</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot complete">4</div>
+                <div class="step-label"><strong>Sole Bidder</strong>Epiris continues alone (24 Jun 2026)</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot active">5</div>
+                <div class="step-label"><strong>PUSU Deadline</strong>5 Aug 2026 &mdash; firm offer or walk away</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot future">6</div>
+                <div class="step-label"><strong>Firm Offer (2.7)</strong>Price, conditions, timetable disclosed</div>
+            </div>
+            <div class="timeline-step">
+                <div class="step-dot future">7</div>
+                <div class="step-label"><strong>Completion</strong>Shareholder vote, CMA clearance, scheme effective</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EVIDENCE DASHBOARD -->
+    <h2 style="font-size:20px; font-weight:700; color:#fff; margin-bottom:20px;">Evidence Dashboard</h2>
+    <div class="grid">
+
+        <!-- Bidder Activity -->
+        <div class="card">
+            <h2><span class="icon">&#128176;</span> Bidder Activity &mdash; Epiris <span class="card-badge badge-active">ACTIVE</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>Epiris LLP</strong> &mdash; London-based mid-market PE, manages &gt;&pound;2.75bn</li>
+                    <li>Fund III closed at &gt;&pound;1bn (oversubscribed, hard cap). Top-decile returns (38% gross IRR 2011&ndash;2016)</li>
+                    <li>Advised by <strong>Goldman Sachs International</strong></li>
+                    <li>Portfolio includes tech/info services: Delinian, Sepura, WBS Solutions</li>
+                    <li>Gamma at ~&pound;877m stretches Epiris&rsquo;s usual upper limit (&pound;500m) &mdash; may need co-investors or debt</li>
+                    <li>PUSU extended twice (12 Jun &rarr; 8 Jul &rarr; <strong>5 Aug</strong>) at Gamma board&rsquo;s request &mdash; board appears engaged</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- PDMR / Insider Dealing -->
+        <div class="card">
+            <h2><span class="icon">&#128200;</span> PDMR / Insider Dealing <span class="card-badge badge-watching">WATCHING</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>Martin Hellawell (Chair):</strong> purchased 2,650 shares at 945p (18 Nov 2025) &mdash; 5 months before offer period opened</li>
+                    <li>Hellawell total holding: 8,650 shares (&lt;0.1%)</li>
+                    <li><strong>CEO Andrew Belshaw:</strong> directly owns ~0.11% of the company</li>
+                    <li><strong>Dealing restrictions:</strong> all PDMRs restricted from dealing during offer period under Takeover Code and MAR</li>
+                    <li>Mar 2025: routine Share Incentive Plan purchases by multiple PDMRs at 1,291p</li>
+                    <li><strong>Watch for:</strong> any post-PUSU PDMR transactions if offer lapses</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Withdrawn Parties -->
+        <div class="card">
+            <h2><span class="icon">&#128683;</span> Withdrawn Parties <span class="card-badge badge-withdrawn">RULE 2.8</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>Providence Equity Partners</strong> &mdash; withdrew 24 Jun 2026. Was in consortium with Epiris. Subject to 6-month Rule 2.8 standstill (cannot bid until ~24 Dec 2026)</li>
+                    <li><strong>Oakley Capital</strong> &mdash; withdrew 12 Jun 2026. Clarified Giacom was looking at asset purchase, not full takeover. Rule 2.8 applies</li>
+                    <li>Oakley/Giacom reportedly considered ~&pound;1bn bid with potential break-up (Sky News)</li>
+                    <li>Rule 2.8 can be set aside by the Takeover Panel if a third-party announces or if Gamma board recommends</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Defence Advisers -->
+        <div class="card">
+            <h2><span class="icon">&#9878;</span> Advisers <span class="card-badge badge-detected">APPOINTED</span></h2>
+            <div class="card-content">
+                <strong>Gamma (target) advisers:</strong>
+                <ul>
+                    <li><strong>Barclays</strong> &mdash; lead financial adviser</li>
+                    <li><strong>Q Advisors</strong> &mdash; specialist TMT adviser</li>
+                    <li><strong>Investec</strong> &mdash; NOMAD and joint broker</li>
+                    <li><strong>Peel Hunt</strong> &mdash; joint broker</li>
+                </ul>
+                <div style="margin-top: 12px;"><strong>Epiris (bidder) adviser:</strong></div>
+                <ul>
+                    <li><strong>Goldman Sachs International</strong> &mdash; acting exclusively for Epiris</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Shareholder Register -->
+        <div class="card">
+            <h2><span class="icon">&#128202;</span> Major Shareholders <span class="card-badge badge-info">REGISTER</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>BlackRock:</strong> ~10.93% &mdash; largest holder</li>
+                    <li><strong>Liontrust:</strong> ~9.94% (reduced from 10.02%, Nov 2024 TR-1)</li>
+                    <li><strong>Standard Life Aberdeen:</strong> ~9.9%</li>
+                    <li><strong>Octopus Investments:</strong> 4.79% (TR-1 Mar 2025, down from 5.59%)</li>
+                    <li>Top 10 holders collectively own ~51% &mdash; dispersed, no blockers</li>
+                    <li>No dual-class shares or golden shares</li>
+                    <li><strong>Watch for:</strong> new TR-1 filings, arbitrageur accumulation, activist positioning</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Form 8.3 / 8.5 Filings -->
+        <div class="card">
+            <h2><span class="icon">&#128203;</span> Dealing Disclosures <span class="card-badge badge-detected">NEW FILING</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong style="color: var(--accent);">Man Group PLC:</strong> filed Form 8.3 (public opening position disclosure) on <strong>31 Jul 2026</strong> &mdash; confirms &ge;1% interest or short position. First major external Form 8.3. Suggests institutional positioning ahead of PUSU deadline. <a href="https://www.globenewswire.com/news-release/2026/07/31/3336654/0/en/Man-Group-PLC-Form-8-3-Gamma-Communications-Plc.html" target="_blank">Filing &rarr;</a></li>
+                    <li><strong>Investec Bank PLC:</strong> filing Form 8.5 (EPT/RI) regularly as exempt principal trader. Ongoing through Jul 2026</li>
+                    <li>Form 8.5 filings are mandatory under Takeover Code Rule 8.5 &mdash; indicate market-making, not directional positioning</li>
+                    <li><strong>Watch for:</strong> additional Form 8.3 filings by other parties &mdash; arb fund accumulation ahead of 5 Aug deadline</li>
+                    <li><strong>Watch for:</strong> any Epiris concert party filings indicating stake building</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Share Price / Volume -->
+        <div class="card">
+            <h2><span class="icon">&#128200;</span> Share Price / Volume <span class="card-badge badge-watching">WATCHING</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li>Current: ~<strong>980p</strong> &mdash; up ~14% over past 2 weeks</li>
+                    <li>52-week range: 688p &ndash; 1,186p</li>
+                    <li>Pre-offer (7 Apr): ~830p. Current implies ~18% offer period premium</li>
+                    <li>Post-Providence withdrawal (24 Jun): fell to 813p, since recovered sharply</li>
+                    <li>Buy signal triggered 7 Jul from pivot bottom at ~855p</li>
+                    <li>Analyst consensus target: ~1,337p (42% upside). Consensus: <strong>Buy</strong></li>
+                    <li><strong>Buyback:</strong> ~2.85M shares repurchased. Prices trending up: 852-868p (early Jul) &rarr; 952-966p (late Jul)</li>
+                    <li><strong>Watch for:</strong> sharp move above 1,100p = bid leak. Drop below 850p = deal dying</li>
+                </ul>
+                <a href="https://finance.yahoo.com/quote/GAMA.L/" target="_blank">Yahoo Finance: GAMA.L</a>
+            </div>
+        </div>
+
+        <!-- Board Changes -->
+        <div class="card">
+            <h2><span class="icon">&#128101;</span> Board Changes <span class="card-badge badge-detected">DETECTED</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>Bill Castell (CFO)</strong> &mdash; departed 31 Mar 2026 for PE-backed business &ldquo;Arrive&rdquo;. CFO leaving for PE during a PE offer period is notable</li>
+                    <li><strong>Damien Maltarp</strong> &mdash; appointed CFO designate 20 Mar 2026, joining by Sep 2026. Ex-BT Enterprise CFO, ex-equity analyst (CS, JPM, BofA). Deep capital markets expertise</li>
+                    <li><strong>Chris Jagusz</strong> &mdash; NED appointed Feb 2026. Ex-CEO Redcentric (AIM M&amp;A target). Ex-Daisy Group (relevant given O2 Daisy deal)</li>
+                    <li>Board composition refreshed Mar 2026 &mdash; adds deal-relevant expertise</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Valuation Context -->
+        <div class="card">
+            <h2><span class="icon">&#128178;</span> Valuation Context <span class="card-badge badge-detected">UNDERVALUED</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li><strong>EV/EBITDA: 6.6x</strong> &mdash; 13-year all-time low (median 14.6x)</li>
+                    <li>P/E (adjusted): ~10x on 94.5p EPS</li>
+                    <li>FCF yield: ~9&ndash;10% (&pound;84m FCF on &pound;877m mkt cap)</li>
+                    <li>Dividend yield: 2.3% (22.2p/share)</li>
+                    <li>89% recurring revenue, 93% cash conversion, ROCE 27.8%</li>
+                    <li>Near-zero net debt (&pound;1.6m at 30 Apr 2026)</li>
+                    <li>Comparable: Vonage/Ericsson 2022 at ~5.5x EV/Revenue</li>
+                    <li><strong>Implication:</strong> PE bid at 12&ndash;15x EBITDA = 1,600&ndash;2,000p per share</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- CMA / Regulatory -->
+        <div class="card">
+            <h2><span class="icon">&#9878;</span> CMA / Regulatory <span class="card-badge badge-nosignal">NO SIGNAL</span></h2>
+            <div class="card-content">
+                <ul>
+                    <li>CMA merger control review would apply to any completed acquisition</li>
+                    <li>Epiris has no direct UK telecoms portfolio overlap &mdash; Phase 1 clearance likely straightforward</li>
+                    <li>A trade buyer (e.g., BT, Vodafone) would face more scrutiny</li>
+                    <li>Ofcom regulation of UK telecoms applies to Gamma as licensed operator</li>
+                    <li>No pre-notification discussions publicly filed</li>
+                    <li><strong>Watch for:</strong> CMA merger notice on gov.uk</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- OFFER PERIOD CHRONOLOGY -->
+    <div class="card card-full">
+        <h2><span class="icon">&#128197;</span> Offer Period Chronology</h2>
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Event</th>
+                        <th>Market Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(34,197,94,0.05);">
+                        <td><strong>7 Apr 2026</strong></td>
+                        <td><strong>Offer period commences.</strong> Gamma discloses receipt of interest from multiple potential counterparties. City Code offer period opens.</td>
+                        <td>Shares rally on bid speculation</td>
+                    </tr>
+                    <tr>
+                        <td>13 May 2026</td>
+                        <td>Gamma confirms <strong>Providence Equity Partners</strong> is among parties in preliminary discussions. AGM trading update confirms trading in line.</td>
+                        <td>&mdash;</td>
+                    </tr>
+                    <tr style="background: rgba(34,197,94,0.05);">
+                        <td><strong>15 May 2026</strong></td>
+                        <td>Gamma confirms talks with <strong>Epiris LLP</strong> and a consortium comprising <strong>Oakley Capital + Giacom</strong> (backed by Inflexion PE). Sky News reports Oakley consortium considering ~&pound;1bn bid.</td>
+                        <td>Shares +8.8% to 1,018p (&pound;922m mkt cap)</td>
+                    </tr>
+                    <tr>
+                        <td>10 Jun 2026</td>
+                        <td>Providence and Epiris confirm they have formed a <strong>consortium</strong> for a possible offer. Initial PUSU deadline set.</td>
+                        <td>&mdash;</td>
+                    </tr>
+                    <tr style="background: rgba(239,68,68,0.05);">
+                        <td><strong>12 Jun 2026</strong></td>
+                        <td><strong>Oakley Capital withdraws.</strong> Clarifies Giacom was looking at asset purchase only, not a full bid. Rule 2.8 applies.</td>
+                        <td>Shares dip on narrowing bidder field</td>
+                    </tr>
+                    <tr style="background: rgba(239,68,68,0.05);">
+                        <td><strong>24 Jun 2026</strong></td>
+                        <td><strong>Providence Equity withdraws.</strong> Does not intend to make an offer independently or as part of the consortium. Epiris confirms it continues alone.</td>
+                        <td>Shares &minus;7.6% to 813.50p</td>
+                    </tr>
+                    <tr>
+                        <td>Jul 2026</td>
+                        <td>PUSU deadline extended twice (12 Jun &rarr; 8 Jul &rarr; <strong>5 Aug 2026</strong>) at Gamma board&rsquo;s request. Gamma references &ldquo;other potential bidders&rdquo; in discussions.</td>
+                        <td>Shares +7.5% on extension news</td>
+                    </tr>
+                    <tr>
+                        <td>29 Jul 2026</td>
+                        <td>Shares rally +14% over 2 weeks from Providence withdrawal lows. Buyback prices trending up (852p &rarr; 966p through July).</td>
+                        <td>~980p, strong momentum</td>
+                    </tr>
+                    <tr style="background: rgba(245,158,11,0.05);">
+                        <td><strong>31 Jul 2026</strong></td>
+                        <td><strong>Current state:</strong> Epiris sole bidder. PUSU deadline 5 Aug (5 days). <strong>Man Group files Form 8.3</strong> &mdash; first major external dealing disclosure. ~2.85M shares bought back. Gamma maintains &ldquo;other potential bidders&rdquo; language.</td>
+                        <td>~980p, mkt cap ~&pound;877m</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SCENARIO PROBABILITIES -->
+    <h2 style="font-size:20px; font-weight:700; color:#fff; margin-bottom:20px;">Scenario Probabilities</h2>
+
+    <div class="ev-bar">
+        <div>
+            <div class="ev-label">Expected Value (probability-weighted)</div>
+            <div class="ev-value">~1,150&ndash;1,300p</div>
+        </div>
+        <div>
+            <div class="ev-vs">Current price: <strong>~980p</strong></div>
+        </div>
+        <div class="ev-ratio">~20&ndash;35% upside asymmetry</div>
+    </div>
+
+    <div class="scenario-grid">
+        <div class="scenario-card scenario-green">
+            <div class="scenario-prob" style="color:var(--accent2);">35-40%</div>
+            <div class="scenario-title">Epiris firm offer (Rule 2.7)</div>
+            <div class="scenario-price">Price target: <strong>1,300&ndash;1,600p</strong></div>
+            <div class="card-content" style="margin-top:12px;">
+                <ul>
+                    <li>PUSU extended twice = board engaged, terms being negotiated</li>
+                    <li>6.6x EBITDA entry + operational improvement = PE playbook</li>
+                    <li>Goldman Sachs involvement signals serious intent</li>
+                    <li>Near-zero net debt, &pound;84m FCF, 89% recurring = ideal LBO</li>
+                </ul>
+            </div>
+        </div>
+        <div class="scenario-card scenario-blue">
+            <div class="scenario-prob" style="color:var(--accent);">15-20%</div>
+            <div class="scenario-title">New bidder emerges</div>
+            <div class="scenario-price">Price target: <strong>1,400&ndash;1,800p</strong></div>
+            <div class="card-content" style="margin-top:12px;">
+                <ul>
+                    <li>Gamma references &ldquo;other potential bidders&rdquo;</li>
+                    <li>Competitive bid = higher premium</li>
+                    <li>Trade buyer (Cisco, RingCentral) or larger PE (Thoma Bravo, Hg)</li>
+                    <li>Oakley/Providence Rule 2.8 can be set aside by Panel</li>
+                </ul>
+            </div>
+        </div>
+        <div class="scenario-card scenario-red">
+            <div class="scenario-prob" style="color:var(--danger);">30-35%</div>
+            <div class="scenario-title">All bidders walk &mdash; offer period ends</div>
+            <div class="scenario-price">Price target: <strong>750&ndash;900p</strong></div>
+            <div class="card-content" style="margin-top:12px;">
+                <ul>
+                    <li>Epiris walks at PUSU deadline</li>
+                    <li>Bid premium unwinds &mdash; shares return to pre-offer levels</li>
+                    <li>Gamma continues as public co at depressed multiple</li>
+                    <li>Buyback provides floor but limited at &pound;42.5m</li>
+                </ul>
+            </div>
+        </div>
+        <div class="scenario-card scenario-yellow">
+            <div class="scenario-prob" style="color:var(--warn);">10-15%</div>
+            <div class="scenario-title">Hostile bid / contested auction</div>
+            <div class="scenario-price">Price target: <strong>1,600&ndash;2,000p</strong></div>
+            <div class="card-content" style="margin-top:12px;">
+                <ul>
+                    <li>Uninvited bidder forces Gamma board's hand</li>
+                    <li>At 6.6x EBITDA, even 15x EBITDA = ~2,000p</li>
+                    <li>Dispersed register (no blocking stake) enables hostile approach</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- KEY DATES & CATALYSTS -->
+    <div class="card card-full">
+        <h2><span class="icon">&#128197;</span> Key Dates &amp; Catalysts</h2>
+        <ul class="catalyst-list">
+            <li class="catalyst-item">
+                <div class="catalyst-date">5 Aug 2026</div>
+                <div class="catalyst-desc"><strong>Epiris PUSU deadline</strong> &mdash; Must announce firm offer (Rule 2.7) or walk (Rule 2.8). Binary event. Deadline can be extended again at Gamma board&rsquo;s request.</div>
+                <div class="catalyst-urgency urgency-imminent">5 DAYS</div>
+            </li>
+            <li class="catalyst-item">
+                <div class="catalyst-date">7 Sep 2026</div>
+                <div class="catalyst-desc"><strong>H1 2026 Interim Results</strong> &mdash; First-half financials + updated guidance. Could influence bid pricing if strong.</div>
+                <div class="catalyst-urgency urgency-near">NEAR TERM</div>
+            </li>
+            <li class="catalyst-item">
+                <div class="catalyst-date">Sep 2026</div>
+                <div class="catalyst-desc"><strong>CFO Damien Maltarp starts</strong> &mdash; New CFO formally joins. Ex-BT Enterprise, ex-equity analyst. Delay or acceleration could signal deal activity.</div>
+                <div class="catalyst-urgency urgency-near">NEAR TERM</div>
+            </li>
+            <li class="catalyst-item">
+                <div class="catalyst-date">~24 Dec 2026</div>
+                <div class="catalyst-desc"><strong>Providence Rule 2.8 expires</strong> &mdash; 6-month standstill from withdrawal. Could re-engage after expiry.</div>
+                <div class="catalyst-urgency urgency-medium">MEDIUM TERM</div>
+            </li>
+            <li class="catalyst-item">
+                <div class="catalyst-date">Jan 2027</div>
+                <div class="catalyst-desc"><strong>UK PSTN Switch-Off</strong> &mdash; BT/Openreach retire legacy PSTN/ISDN. 2M+ connections to migrate &mdash; major catalyst for Gamma&rsquo;s UCaaS and SIP products.</div>
+                <div class="catalyst-urgency urgency-medium">MEDIUM TERM</div>
+            </li>
+            <li class="catalyst-item">
+                <div class="catalyst-date">31 Dec 2026</div>
+                <div class="catalyst-desc"><strong>&pound;42.5M buyback programme ends</strong> &mdash; Second &pound;42.5M tranche planned for FY2027.</div>
+                <div class="catalyst-urgency urgency-medium">MEDIUM TERM</div>
+            </li>
+        </ul>
+    </div>
+
+    <!-- POTENTIAL BIDDER WATCHLIST -->
+    <div class="card card-full">
+        <h2><span class="icon">&#127919;</span> Bidder Watchlist</h2>
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Party</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Rationale</th>
+                        <th>Signal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(239,68,68,0.03);">
+                        <td><strong>Epiris LLP</strong></td>
+                        <td><span class="partner-tag partner-active">ACTIVE BIDDER</span></td>
+                        <td>PUSU 5 Aug. Goldman Sachs advising</td>
+                        <td>Mid-market PE, &gt;&pound;2.75bn AUM, top-decile returns. Gamma fits tech-enabled B2B services thesis</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>Providence Equity</td>
+                        <td><span class="partner-tag partner-pe">PE</span></td>
+                        <td><span class="partner-tag partner-withdrawn">WITHDRAWN / 2.8</span></td>
+                        <td>$50bn+ TMT-specialist PE. Was in consortium with Epiris. Rule 2.8 until ~24 Dec 2026</td>
+                        <td><span class="signal-strength"><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>Oakley Capital / Giacom</td>
+                        <td><span class="partner-tag partner-pe">PE</span></td>
+                        <td><span class="partner-tag partner-withdrawn">WITHDRAWN / 2.8</span></td>
+                        <td>Giacom (Inflexion-backed) considered asset purchase. Oakley withdrew from full bid</td>
+                        <td><span class="signal-strength"><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Thoma Bravo</strong></td>
+                        <td><span class="partner-tag partner-pe">PE</span></td>
+                        <td>Not named</td>
+                        <td>Largest software PE ($160bn+). Recent: Dayforce $12.3bn. UCaaS/SaaS fits thesis. Fund size no constraint</td>
+                        <td><span class="signal-strength"><span class="signal-bar warn"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hg Capital</strong></td>
+                        <td><span class="partner-tag partner-pe">PE</span></td>
+                        <td>Not named</td>
+                        <td>UK-headquartered software PE. Deep European B2B SaaS expertise. Invested in Visma, Iris, etc.</td>
+                        <td><span class="signal-strength"><span class="signal-bar warn"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cisco</strong></td>
+                        <td><span class="partner-tag partner-trade">TRADE</span></td>
+                        <td>Not named</td>
+                        <td>Gamma&rsquo;s Horizon built on Cisco Webex/BroadWorks. Vertical integration play. Cisco M&amp;A-active</td>
+                        <td><span class="signal-strength"><span class="signal-bar warn"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>RingCentral</strong></td>
+                        <td><span class="partner-tag partner-trade">TRADE</span></td>
+                        <td>Not named</td>
+                        <td>Global UCaaS leader. Gamma&rsquo;s European channel + infrastructure would accelerate EU expansion</td>
+                        <td><span class="signal-strength"><span class="signal-bar warn"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>BT Group</strong></td>
+                        <td><span class="partner-tag partner-trade">TRADE</span></td>
+                        <td>Not named</td>
+                        <td>Gamma supplies wholesale voice to BT ecosystem. Vertical integration, but CMA scrutiny likely</td>
+                        <td><span class="signal-strength"><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MONITORING CHECKLIST -->
+    <div class="card card-full">
+        <h2><span class="icon">&#9745;</span> Monitoring Checklist</h2>
+        <ul class="checklist" id="checklist">
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://www.investegate.co.uk/company/GAMA" target="_blank">Investegate GAMA RNS page</a> for Rule 2.7 firm offer, PUSU extension, new bidder (Rule 2.4), or offer withdrawal</div>
+                <span class="check-freq">Daily</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://www.thetakeoverpanel.org.uk/" target="_blank">Takeover Panel</a> for any practice statements, PUSU extensions, or concert party rulings</div>
+                <span class="check-freq">Daily</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://www.investegate.co.uk/company/GAMA" target="_blank">Investegate</a> for Form 8.3 / 8.5 dealing disclosures &mdash; any 1%+ positions by third parties</div>
+                <span class="check-freq">Daily</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://finance.yahoo.com/quote/GAMA.L/" target="_blank">GAMA.L share price</a> &mdash; watch for moves above 1,100p (bid leak) or below 850p (deal dying)</div>
+                <span class="check-freq">Daily</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check for TR-1 major holdings notifications on <a href="https://www.investegate.co.uk/company/GAMA" target="_blank">Investegate</a> &mdash; any new 3%+ positions</div>
+                <span class="check-freq">Weekly</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://www.gov.uk/cma-cases" target="_blank">CMA merger notices</a> for any pre-notification or Phase 1 filings involving Gamma</div>
+                <span class="check-freq">Weekly</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://gammagroup.co/company/investors/" target="_blank">Gamma IR page</a> for buyback updates, board changes, regulatory filings</div>
+                <span class="check-freq">Weekly</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check <a href="https://www.epiris.co.uk/investments/" target="_blank">Epiris website</a> for portfolio updates, investment announcements</div>
+                <span class="check-freq">Weekly</span>
+            </li>
+            <li>
+                <div class="check-box" onclick="toggleCheck(this)"></div>
+                <div class="check-label">Check UCaaS sector news &mdash; competitor M&amp;A, analyst notes, conference coverage via <a href="https://www.uctoday.com/" target="_blank">UC Today</a></div>
+                <span class="check-freq">Weekly</span>
+            </li>
+        </ul>
+        <div style="margin-top: 16px;">
+            <button onclick="resetChecklist()" style="background:var(--accent); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Reset All</button>
+        </div>
+    </div>
+
+    <!-- SOURCE LINKS -->
+    <div class="card card-full">
+        <h2><span class="icon">&#128279;</span> Source Links</h2>
+        <div class="source-grid">
+            <div class="source-group">
+                <h3>Official / Regulatory</h3>
+                <div class="source-link-item"><span class="dot dot-official"></span><a href="https://gammagroup.co/" target="_blank">Gamma Communications &mdash; Company Website</a></div>
+                <div class="source-link-item"><span class="dot dot-official"></span><a href="https://gammagroup.co/company/investors/" target="_blank">Gamma &mdash; Investor Relations</a></div>
+                <div class="source-link-item"><span class="dot dot-official"></span><a href="https://www.investegate.co.uk/company/GAMA" target="_blank">Investegate &mdash; GAMA RNS Feed</a></div>
+                <div class="source-link-item"><span class="dot dot-official"></span><a href="https://www.londonstockexchange.com/stock/GAMA/gamma-communications-plc/company-page" target="_blank">LSE &mdash; GAMA Company Page</a></div>
+                <div class="source-link-item"><span class="dot dot-takeover"></span><a href="https://www.thetakeoverpanel.org.uk/" target="_blank">UK Takeover Panel</a></div>
+                <div class="source-link-item"><span class="dot dot-official"></span><a href="https://www.gov.uk/cma-cases" target="_blank">CMA &mdash; Merger Cases</a></div>
+            </div>
+            <div class="source-group">
+                <h3>News / Analysis</h3>
+                <div class="source-link-item"><span class="dot dot-news"></span><a href="https://www.uctoday.com/" target="_blank">UC Today &mdash; UCaaS News</a></div>
+                <div class="source-link-item"><span class="dot dot-news"></span><a href="https://www.sharecast.com/search/GAMA" target="_blank">Sharecast &mdash; GAMA</a></div>
+                <div class="source-link-item"><span class="dot dot-news"></span><a href="https://www.proactiveinvestors.com/LON:GAMA/Gamma-Communications-PLC" target="_blank">Proactive Investors &mdash; GAMA</a></div>
+                <div class="source-link-item"><span class="dot dot-news"></span><a href="https://www.tipranks.com/stocks/gb:gama" target="_blank">TipRanks &mdash; GAMA</a></div>
+                <div class="source-link-item"><span class="dot dot-news"></span><a href="https://www.stockopedia.com/share-prices/gamma-communications-LON:GAMA/" target="_blank">Stockopedia &mdash; GAMA</a></div>
+            </div>
+            <div class="source-group">
+                <h3>Market Data</h3>
+                <div class="source-link-item"><span class="dot dot-market"></span><a href="https://finance.yahoo.com/quote/GAMA.L/" target="_blank">Yahoo Finance &mdash; GAMA.L</a></div>
+                <div class="source-link-item"><span class="dot dot-market"></span><a href="https://finance.yahoo.com/quote/GAMA.L/history/" target="_blank">Yahoo Finance &mdash; Historical Prices</a></div>
+                <div class="source-link-item"><span class="dot dot-market"></span><a href="https://www.investing.com/equities/gamma-communications-plc" target="_blank">Investing.com &mdash; GAMA</a></div>
+                <div class="source-link-item"><span class="dot dot-market"></span><a href="https://www.marketbeat.com/stocks/LON/GAMA/" target="_blank">MarketBeat &mdash; GAMA</a></div>
+            </div>
+            <div class="source-group">
+                <h3>Bidder</h3>
+                <div class="source-link-item"><span class="dot dot-takeover"></span><a href="https://www.epiris.co.uk/" target="_blank">Epiris LLP</a></div>
+                <div class="source-link-item"><span class="dot dot-takeover"></span><a href="https://www.epiris.co.uk/investments/" target="_blank">Epiris &mdash; Portfolio</a></div>
+                <div class="source-link-item"><span class="dot dot-takeover"></span><a href="https://bratby.law/gamma-communications-takeover-cma-merger-control-and-channel-implications/" target="_blank">Bratby Law &mdash; GAMA Takeover CMA Analysis</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FINDINGS LOG -->
+    <div class="card card-full">
+        <h2><span class="icon">&#128203;</span> Findings Log</h2>
+        <div style="overflow-x: auto;">
+            <table class="data-table" id="findings-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Finding</th>
+                        <th>Strength</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>31 Jul 2026</td>
+                        <td><span class="log-type type-market">DISCLOSURE</span></td>
+                        <td><a href="https://www.globenewswire.com/news-release/2026/07/31/gamma-communications-form-8-3" target="_blank">GlobeNewsWire</a></td>
+                        <td><strong>Man Group files Form 8.3</strong> &mdash; first major external dealing disclosure during offer period. Indicates institutional positioning ahead of PUSU deadline.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>31 Jul 2026</td>
+                        <td><span class="log-type type-catalyst">CATALYST</span></td>
+                        <td>Monitor analysis</td>
+                        <td><strong>PUSU deadline 5 days away (5 Aug).</strong> Share price rallied +14% over 2 weeks from Providence withdrawal lows. Buyback prices trending up 852p &rarr; 966p through July (~2.85M shares total). Analyst consensus Buy, target 1,337p.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>29 Jul 2026</td>
+                        <td><span class="log-type type-bidder">BIDDER</span></td>
+                        <td>Monitor analysis</td>
+                        <td>PUSU deadline 7 days away. Epiris sole bidder. PUSU extended twice at Gamma&rsquo;s request &mdash; board appears engaged in negotiations. Goldman Sachs advising Epiris. No price disclosed.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>29 Jul 2026</td>
+                        <td><span class="log-type type-market">VALUATION</span></td>
+                        <td>Monitor analysis</td>
+                        <td><strong>EV/EBITDA at 13-year low (6.6x).</strong> Analyst consensus 1,400&ndash;1,800p. FCF yield ~10%. Near-zero net debt. Textbook PE LBO candidate &mdash; but market pricing significant risk of deal failure.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>24 Jun 2026</td>
+                        <td><span class="log-type type-withdrawn">WITHDRAWN</span></td>
+                        <td><a href="https://www.investing.com/news/company-news/providence-equity-withdraws-from-gamma-communications-bid-93CH-4757623" target="_blank">Investing.com</a></td>
+                        <td>Providence Equity withdraws from consortium. Shares &minus;7.6% to 813p. Epiris confirms it continues alone. Narrowing bidder field reduces competitive tension.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>12 Jun 2026</td>
+                        <td><span class="log-type type-withdrawn">WITHDRAWN</span></td>
+                        <td><a href="https://www.sharecast.com/news/news-and-announcements/oakley-capital-not-planning-to-bid-for-gamma-communications--22721150.html" target="_blank">Sharecast</a></td>
+                        <td>Oakley Capital withdraws. Giacom was only considering asset purchase, not full bid. Sky News had reported ~&pound;1bn consideration with potential break-up.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>15 May 2026</td>
+                        <td><span class="log-type type-bidder">BIDDER</span></td>
+                        <td><a href="https://www.uctoday.com/unified-communications/gamma-communications-the-1-billion-battle-for-britains-ucaas-backbone/" target="_blank">UC Today</a></td>
+                        <td>Three parties named: Epiris, Providence, Oakley/Giacom. Shares +8.8% to 1,018p. Maximum competitive tension with three interested parties.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>7 Apr 2026</td>
+                        <td><span class="log-type type-bidder">BIDDER</span></td>
+                        <td><a href="https://www.investegate.co.uk/company/GAMA" target="_blank">Investegate</a></td>
+                        <td>Gamma discloses receipt of interest from multiple potential counterparties. Offer period commences under City Code.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>24 Mar 2026</td>
+                        <td><span class="log-type type-catalyst">CATALYST</span></td>
+                        <td><a href="https://www.investegate.co.uk/announcement/rns/gamma-communications--gama/final-results/9487860" target="_blank">Investegate</a></td>
+                        <td>FY2025 results: Revenue &pound;645.8m (+11%), EBITDA &pound;141.7m (+13%), margin 22%, 93% cash conversion. &pound;42.5m buyback announced. Strong financials ahead of offer period.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>20 Mar 2026</td>
+                        <td><span class="log-type type-board">BOARD</span></td>
+                        <td><a href="https://www.directorstalkinterviews.com/gamma-communications-appoints-damien-maltarp-as-cfo-and-executive-director/4121245530" target="_blank">DirectorsTalk</a></td>
+                        <td>Damien Maltarp appointed CFO. Ex-BT Enterprise CFO, ex-equity analyst (CS, JPM, BofA). Replaces Bill Castell who left for PE-backed business.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                    <tr>
+                        <td>18 Nov 2025</td>
+                        <td><span class="log-type type-insider">INSIDER</span></td>
+                        <td><a href="https://www.investegate.co.uk/announcement/rns/gamma-communications--gama/director-pdmr-shareholding/9242027" target="_blank">Investegate</a></td>
+                        <td>Chair Martin Hellawell purchases 2,650 shares at 945p. Small position but notable timing &mdash; 5 months before offer period opened. Stock subsequently rallied to 1,018p on bid interest.</td>
+                        <td><span class="signal-strength"><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar on"></span><span class="signal-bar"></span></span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PROBABILITY MOVERS -->
+    <div class="card card-full">
+        <h2><span class="icon">&#8693;</span> What Moves the Probabilities</h2>
+        <div class="grid" style="margin-bottom:0;">
+            <div>
+                <h3 style="color:var(--accent2); font-size:14px; margin-bottom:12px;">BULLISH TRIGGERS (bid happens)</h3>
+                <div class="card-content">
+                    <ul>
+                        <li>Epiris Rule 2.7 announcement before 5 Aug &rarr; Scenario 1 confirmed</li>
+                        <li>PUSU extended again &rarr; active negotiations, deal close to agreeing</li>
+                        <li>New Rule 2.4 announcement naming fresh party &rarr; competitive auction</li>
+                        <li>Form 8.3 showing arb accumulation above 1,100p &rarr; market pricing bid</li>
+                        <li>Strong H1 results (7 Sep) &rarr; raises floor for bid price</li>
+                        <li>Epiris brings co-investor to fill funding gap (Gamma at &pound;877m vs usual &pound;500m)</li>
+                    </ul>
+                </div>
+            </div>
+            <div>
+                <h3 style="color:var(--danger); font-size:14px; margin-bottom:12px;">BEARISH TRIGGERS (deal fails)</h3>
+                <div class="card-content">
+                    <ul>
+                        <li>Epiris walks at PUSU deadline &rarr; offer period ends, shares to 750&ndash;850p</li>
+                        <li>No PUSU extension granted &rarr; Gamma board disengaged</li>
+                        <li>Epiris Rule 2.8 notice &rarr; 6-month standstill, all bidders gone</li>
+                        <li>Weak H1 trading update &rarr; bid price anchors lower</li>
+                        <li>Major shareholder publicly rejects rumoured price &rarr; valuation gap too wide</li>
+                        <li>UK macro / rates deterioration &rarr; PE debt financing becomes prohibitive</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BUSINESS SNAPSHOT -->
+    <div class="card card-full">
+        <h2><span class="icon">&#128188;</span> Business Snapshot</h2>
+        <div class="grid" style="margin-bottom:0;">
+            <div class="card-content">
+                <strong>What Gamma does:</strong>
+                <ul>
+                    <li>Pan-European B2B cloud communications platform &mdash; UCaaS, SIP trunking, cloud PBX, CCaaS, connectivity</li>
+                    <li>Channel-led model: 3,000+ partners across UK &amp; Europe</li>
+                    <li>Owns 2,500km fibre network + switching centres (London, Manchester, Glasgow)</li>
+                    <li>Microsoft Teams Operator Connect partner (one of largest globally)</li>
+                    <li>89% recurring revenue, 54% gross margins, 22% EBITDA margins</li>
+                </ul>
+            </div>
+            <div class="card-content">
+                <strong>Geographic split:</strong>
+                <ul>
+                    <li><strong>UK Business:</strong> Channel-led UCaaS/SIP for SMEs (largest segment)</li>
+                    <li><strong>UK Enterprise:</strong> Direct sales to larger accounts + AI deployments</li>
+                    <li><strong>Germany:</strong> Placetel + STARFACE &mdash; approaching &frac14; of group GP. Double-digit organic growth</li>
+                    <li><strong>Spain:</strong> Gamma Comunicaciones (SIP + cloud PBX)</li>
+                    <li><strong>Netherlands:</strong> 900+ channel partners (ex-Dean One/gnTel)</li>
+                    <li><strong>Croatia:</strong> Entered 2024 (Adriatic beachhead)</li>
+                </ul>
+            </div>
+        </div>
+        <div style="margin-top:16px; font-size:13px; color:var(--muted);">
+            <strong style="color:var(--text);">PE appeal:</strong> Predictable recurring revenue, high cash conversion, low capex, fragmented European market for bolt-on M&amp;A, PSTN switch-off tailwind, channel model = low customer acquisition cost. O2 Daisy deal (Sep 2025) repositioned as pure B2B wholesale/enterprise platform &mdash; cleaner for PE.
+        </div>
+    </div>
+
+</div>
+
+<script>
+// PUSU countdown
+function updateCountdown() {
+    const pusu = new Date('2026-08-05T17:00:00+01:00');
+    const now = new Date();
+    const diff = pusu - now;
+    const el = document.getElementById('countdown');
+    if (diff <= 0) {
+        el.textContent = 'DEADLINE PASSED';
+        el.style.color = '#ef4444';
+        return;
+    }
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    if (days > 0) {
+        el.textContent = days + 'd ' + hours + 'h';
+    } else {
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        el.textContent = hours + 'h ' + mins + 'm';
+    }
+}
+updateCountdown();
+setInterval(updateCountdown, 60000);
+
+// Checklist localStorage persistence
+function toggleCheck(el) {
+    el.classList.toggle('checked');
+    const label = el.nextElementSibling;
+    label.classList.toggle('done');
+    saveChecklist();
+}
+
+function saveChecklist() {
+    const items = document.querySelectorAll('#checklist .check-box');
+    const state = Array.from(items).map(el => el.classList.contains('checked'));
+    localStorage.setItem('gama-checklist', JSON.stringify(state));
+}
+
+function loadChecklist() {
+    const saved = localStorage.getItem('gama-checklist');
+    if (saved) {
+        const state = JSON.parse(saved);
+        const items = document.querySelectorAll('#checklist .check-box');
+        items.forEach((el, i) => {
+            if (state[i]) {
+                el.classList.add('checked');
+                el.nextElementSibling.classList.add('done');
+            }
+        });
+    }
+}
+
+function resetChecklist() {
+    const items = document.querySelectorAll('#checklist .check-box');
+    items.forEach(el => {
+        el.classList.remove('checked');
+        el.nextElementSibling.classList.remove('done');
+    });
+    localStorage.removeItem('gama-checklist');
+}
+
+loadChecklist();
+</script>
+
+</body>
+</html>
